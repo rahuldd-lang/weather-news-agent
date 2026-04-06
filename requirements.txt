@@ -1,0 +1,6 @@
+anthropic>=0.89.0
+mcp>=1.27.0
+streamlit>=1.56.0
+httpx>=0.28.1
+certifi>=2026.2.25
+pandas>=2.0.0

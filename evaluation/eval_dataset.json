@@ -1,0 +1,137 @@
+[
+  {
+    "id": "weather_001",
+    "category": "weather",
+    "query": "What is the current weather in London?",
+    "criteria": {
+      "mentions_city": "Response mentions London or UK",
+      "has_temperature": "Response includes a temperature value",
+      "has_conditions": "Response describes weather conditions (sunny, cloudy, rain, etc.)",
+      "no_error": "Response does not indicate an error or failure"
+    },
+    "expected_keywords": ["London", "temperature", "°C", "weather", "humidity"],
+    "unexpected_keywords": ["error", "not found", "unable to"],
+    "min_length": 60
+  },
+  {
+    "id": "weather_002",
+    "category": "weather",
+    "query": "What will the weather be like in Tokyo over the next 3 days?",
+    "criteria": {
+      "mentions_city": "Response mentions Tokyo or Japan",
+      "has_forecast": "Response includes forecast for multiple days",
+      "has_temperature": "Response includes temperature values",
+      "no_error": "Response does not indicate an error or failure"
+    },
+    "expected_keywords": ["Tokyo", "temperature", "°C", "forecast"],
+    "unexpected_keywords": ["error", "not found", "cannot"],
+    "min_length": 100
+  },
+  {
+    "id": "weather_003",
+    "category": "weather",
+    "query": "Is it going to rain in New York tomorrow?",
+    "criteria": {
+      "mentions_city": "Response mentions New York or NYC",
+      "mentions_rain": "Response mentions precipitation or rain probability",
+      "has_temperature": "Response includes temperature values",
+      "no_error": "Response does not indicate an error or failure"
+    },
+    "expected_keywords": ["New York", "rain", "precipitation"],
+    "unexpected_keywords": ["error", "not found"],
+    "min_length": 60
+  },
+  {
+    "id": "weather_004",
+    "category": "weather",
+    "query": "How hot is it in Sydney Australia right now?",
+    "criteria": {
+      "mentions_city": "Response mentions Sydney or Australia",
+      "has_temperature": "Response includes a temperature value",
+      "no_error": "Response does not indicate an error or failure"
+    },
+    "expected_keywords": ["Sydney", "temperature", "°C"],
+    "unexpected_keywords": ["error", "not found"],
+    "min_length": 50
+  },
+  {
+    "id": "weather_005",
+    "category": "weather",
+    "query": "What's the weather like in InvalidCityXYZ123?",
+    "criteria": {
+      "handles_gracefully": "Response gracefully handles the unknown location without crashing",
+      "no_crash": "Response is still a proper sentence (not an empty string or raw error)"
+    },
+    "expected_keywords": ["not found", "location", "city"],
+    "unexpected_keywords": [],
+    "min_length": 20
+  },
+  {
+    "id": "news_001",
+    "category": "news",
+    "query": "What are the top technology news stories right now?",
+    "criteria": {
+      "has_multiple_stories": "Response lists at least 3 news stories",
+      "has_titles": "Response includes story titles",
+      "has_links": "Response includes URLs or mentions sources",
+      "no_error": "Response does not indicate an error or failure"
+    },
+    "expected_keywords": ["news", "story", "http"],
+    "unexpected_keywords": ["error", "unable to fetch", "failed"],
+    "min_length": 150
+  },
+  {
+    "id": "news_002",
+    "category": "news",
+    "query": "Find me recent news about artificial intelligence and large language models",
+    "criteria": {
+      "topic_relevance": "Response contains stories related to AI, ML, or language models",
+      "has_multiple_stories": "Response lists at least 2 stories",
+      "no_error": "Response does not indicate an error or failure"
+    },
+    "expected_keywords": ["AI", "model", "language", "machine"],
+    "unexpected_keywords": ["error", "unable to fetch"],
+    "min_length": 100
+  },
+  {
+    "id": "news_003",
+    "category": "news",
+    "query": "What are people talking about in startups and venture capital?",
+    "criteria": {
+      "topic_relevance": "Response mentions startups, funding, or VC-related topics",
+      "has_stories": "Response includes actual news items",
+      "no_error": "Response does not indicate an error or failure"
+    },
+    "expected_keywords": ["startup", "funding", "company", "million", "billion"],
+    "unexpected_keywords": ["error", "not available"],
+    "min_length": 100
+  },
+  {
+    "id": "mixed_001",
+    "category": "mixed",
+    "query": "Tell me the weather in Berlin and also give me the latest tech news",
+    "criteria": {
+      "has_weather": "Response includes weather information for Berlin",
+      "has_news": "Response includes at least one news story",
+      "mentions_city": "Response mentions Berlin",
+      "no_error": "Response does not indicate a fatal error"
+    },
+    "expected_keywords": ["Berlin", "temperature", "news"],
+    "unexpected_keywords": ["error", "unable"],
+    "min_length": 150
+  },
+  {
+    "id": "mixed_002",
+    "category": "mixed",
+    "query": "What's the weather forecast for Paris for the next week, and what are the latest news about climate change?",
+    "criteria": {
+      "has_forecast": "Response includes multi-day weather forecast",
+      "mentions_city": "Response mentions Paris or France",
+      "has_climate_news": "Response mentions climate change or environment news",
+      "no_error": "Response does not indicate a fatal error"
+    },
+    "expected_keywords": ["Paris", "forecast", "climate"],
+    "unexpected_keywords": ["error", "unable"],
+    "min_length": 150
+  }
+]
