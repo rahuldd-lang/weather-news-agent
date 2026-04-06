@@ -20,9 +20,19 @@ import asyncio
 import concurrent.futures
 import json
 import sys
+import threading
 from pathlib import Path
 
 import streamlit as st
+
+# Propagate Streamlit's ScriptRunContext into background threads so that
+# UI calls (st.progress, st.empty, etc.) work without the "missing
+# ScriptRunContext" warning on Streamlit Community Cloud.
+try:
+    from streamlit.runtime.scriptrunner import add_script_run_ctx, get_script_run_ctx
+    _HAS_ST_CTX = True
+except ImportError:
+    _HAS_ST_CTX = False
 
 # ── Project root on sys.path ──────────────────────────────────────────────────
 PROJECT_ROOT = Path(__file__).resolve().parent
@@ -151,13 +161,24 @@ def _run_in_thread(coro):
     """
     Execute *coro* in a brand-new thread that owns its own event loop.
 
-    This sidesteps the uvloop / nest_asyncio incompatibility that arises
-    when Streamlit is running under uvloop on macOS/Linux — nest_asyncio
-    cannot patch uvloop, but a plain thread always gets a fresh asyncio
-    event loop that asyncio.run() can manage without any patching.
+    Two problems solved here:
+    1. uvloop incompatibility — Streamlit on macOS/Linux uses uvloop which
+       nest_asyncio cannot patch. A plain new thread always gets a standard
+       asyncio loop that asyncio.run() manages without any patching.
+    2. Missing ScriptRunContext — Streamlit UI calls (st.progress, st.empty,
+       etc.) made from a background thread emit a warning and may silently
+       fail on Streamlit Community Cloud. We capture the context on the main
+       thread and inject it into the worker thread before the coroutine runs.
     """
+    ctx = get_script_run_ctx() if _HAS_ST_CTX else None
+
+    def _target():
+        if _HAS_ST_CTX and ctx is not None:
+            add_script_run_ctx(threading.current_thread(), ctx)
+        return asyncio.run(coro)
+
     with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
-        future = pool.submit(asyncio.run, coro)
+        future = pool.submit(_target)
         return future.result()  # re-raises any exception from the thread
 
 
