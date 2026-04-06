@@ -559,8 +559,8 @@ with tab_about:
            │ stdio MCP            │ stdio MCP
            ▼                      ▼
 ┌──────────────────┐   ┌──────────────────────────────┐
-│ Weather MCP      │   │  News MCP Server              │
-│ Server           │   │  (HackerNews via Algolia)     │
+│ Weather MCP      │   │  GNews MCP Server              │
+│ Server           │   │  (GNews.io)                   │
 │ (Open-Meteo)     │   │                               │
 │                  │   │  Tools:                       │
 │ Tools:           │   │  • get_top_news               │
@@ -571,8 +571,8 @@ with tab_about:
 └────────┬─────────┘   └───────────────┬──────────────┘
          │                             │
          ▼                             ▼
-  open-meteo.com             hn.algolia.com
-  (free, no API key)         (free, no API key)
+  open-meteo.com             gnews.io/api/v4/
+  (free, no API key)         (free, API key)
 ```
 
 ## MCP Servers
@@ -585,10 +585,10 @@ with tab_about:
   - `get_current_weather(city)` — temperature, humidity, wind, pressure, visibility
   - `get_weather_forecast(city, days=7)` — up to 16-day daily forecast
 
-### 📰 HackerNews News Server (`mcp_servers/news_server.py`)
+### 📰 GNews News Server (`mcp_servers/news_server.py`)
 - **Protocol:** Model Context Protocol (MCP) over stdio
 - **Library:** `mcp` (FastMCP)
-- **Data source:** [Algolia HN Search API](https://hn.algolia.com/api) — free, no API key
+- **Data source:** [GNews API](https://gnews.io/api/v4/) — free, requires API key
 - **Tools:**
   - `get_top_news(limit)` — front-page quality stories
   - `get_recent_news(limit)` — latest submissions by time
