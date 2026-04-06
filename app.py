@@ -142,17 +142,17 @@ with st.sidebar:
     tools = [
         ("🌡️", "get_current_weather", "Open-Meteo"),
         ("📅", "get_weather_forecast", "Open-Meteo"),
-        ("📰", "get_top_news", "HackerNews"),
-        ("🆕", "get_recent_news", "HackerNews"),
-        ("🔍", "search_news", "HackerNews"),
-        ("🏷️", "get_news_by_topic", "HackerNews"),
+        ("📰", "get_top_news", "GNews.io"),
+        ("🆕", "get_recent_news", "GNews.io"),
+        ("🔍", "search_news", "GNews.io"),
+        ("🏷️", "get_news_by_topic", "GNews.io"),
     ]
     for icon, name, source in tools:
         st.markdown(f"{icon} `{name}`  \n<span style='font-size:0.75rem;color:#888'>{source}</span>", unsafe_allow_html=True)
 
     st.divider()
-    st.caption("No news API key required — uses HackerNews via Algolia Search API.")
-    st.caption("No weather API key required — uses Open-Meteo.")
+    st.caption("Weather: Open-Meteo — free, no API key.")
+    st.caption("News: GNews.io — configured via server secrets.")
 
 
 # ── Helper: run async code safely regardless of the host event loop ───────────
@@ -182,9 +182,21 @@ def _run_in_thread(coro):
         return future.result()  # re-raises any exception from the thread
 
 
+def _load_gnews_key() -> str:
+    """Read the GNews API key from Streamlit secrets (server-side config only)."""
+    try:
+        return st.secrets.get("GNEWS_API_KEY", "")
+    except Exception:
+        return ""
+
+
 def run_query(query: str, api_key: str, model: str, history: list) -> dict:
     """Synchronous wrapper around the async orchestrator."""
-    orchestrator = WeatherNewsOrchestrator(api_key=api_key, model=model)
+    orchestrator = WeatherNewsOrchestrator(
+        api_key=api_key,
+        model=model,
+        gnews_api_key=_load_gnews_key(),
+    )
     return _run_in_thread(orchestrator.process_query(query, history=history))
 
 
@@ -365,7 +377,11 @@ with tab_eval:
         if category_filter:
             dataset = [tc for tc in dataset if tc["category"] == category_filter]
 
-        orchestrator = WeatherNewsOrchestrator(api_key=api_key, model=model)
+        orchestrator = WeatherNewsOrchestrator(
+            api_key=api_key,
+            model=model,
+            gnews_api_key=_load_gnews_key(),
+        )
         evaluator = Evaluator(api_key=api_key if run_llm_judge else None, model=model)
 
         progress_bar = st.progress(0, text="Starting evaluation…")

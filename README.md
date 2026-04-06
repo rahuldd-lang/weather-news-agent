@@ -11,7 +11,7 @@ Streamlit UI
     └── Agent Orchestrator (Claude, tool-use loop)
             ├── Weather MCP Server  (Open-Meteo — free, no key)
             │       tools: get_current_weather · get_weather_forecast
-            └── News MCP Server    (HackerNews via Algolia — free, no key)
+            └── News MCP Server    (GNews.io — free tier, key via secrets)
                     tools: get_top_news · get_recent_news
                            search_news · get_news_by_topic
 ```
@@ -44,14 +44,20 @@ Get a free key at [console.anthropic.com](https://console.anthropic.com).
 |------------|-----|----------|
 | [Anthropic Claude](https://console.anthropic.com) | LLM agent brain | **Yes — entered in the app sidebar** |
 | [Open-Meteo](https://open-meteo.com) | Weather data | No |
-| [HackerNews / Algolia](https://hn.algolia.com/api) | News data | No |
+| [GNews.io](https://gnews.io) | News data | **Yes — free tier, set in server secrets** |
+
+Get a free GNews API key at [gnews.io/register](https://gnews.io/register) (100 req/day, no credit card).
 
 ## Deploying to Streamlit Community Cloud
 
 1. Push the repo to GitHub.
 2. Go to [share.streamlit.io](https://share.streamlit.io) and click **New app**.
-3. Select your repo, set **Main file path** to `app.py`, and click **Deploy**.
-4. Users enter their own Anthropic API key directly in the app sidebar — no server-side secrets needed.
+3. Select your repo, set **Main file path** to `app.py`.
+4. Click **Advanced settings → Secrets** and add:
+   ```toml
+   GNEWS_API_KEY = "your_gnews_key_here"
+   ```
+5. Click **Deploy**. Users enter their own Anthropic API key in the sidebar; the GNews key is server-side only.
 
 ## Models supported
 

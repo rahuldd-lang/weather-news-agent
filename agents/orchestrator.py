@@ -13,6 +13,7 @@ Usage (from async code):
 from __future__ import annotations
 
 import json
+import os
 import sys
 from pathlib import Path
 from typing import Any
@@ -35,16 +36,16 @@ NEWS_SERVER = str(_SERVERS_DIR / "news_server.py")
 # ── System prompt ──────────────────────────────────────────────────────────────
 SYSTEM_PROMPT = """You are a knowledgeable and friendly AI assistant that specialises in:
 1. **Current weather** — real-time conditions and multi-day forecasts for any city worldwide.
-2. **Latest news** — top stories and topic-specific searches from Hacker News.
+2. **Latest news** — top stories and topic-specific searches from GNews.io.
 
 Guidelines:
 - Always use the provided tools to fetch live data before answering.
 - Present weather data clearly: include temperature (°C), description, humidity, wind, and feels-like.
-- Present news as a concise bulleted list with title, points, and URL.
+- Present news as a concise bulleted list with title, points, summary, and URL.
 - If asked about both weather and news in one query, address both.
 - Be friendly, concise, and factually accurate based on the tool output.
 - If a location is not found, politely say so and suggest trying a different name.
-- Units: temperature in °C, wind speed in km/h, precipitation in mm.
+- Units: temperature in °F, wind speed in miles/h, precipitation in mm.
 """
 
 # ── Tool conversion helpers ────────────────────────────────────────────────────
@@ -75,9 +76,15 @@ class WeatherNewsOrchestrator:
     terminates the servers.  This is safe for multi-user Streamlit apps.
     """
 
-    def __init__(self, api_key: str, model: str = "claude-haiku-4-5-20251001"):
+    def __init__(
+        self,
+        api_key: str,
+        model: str = "claude-haiku-4-5-20251001",
+        gnews_api_key: str = "",
+    ):
         self.api_key = api_key
         self.model = model
+        self.gnews_api_key = gnews_api_key
 
     # ── Public API ─────────────────────────────────────────────────────────────
 
@@ -111,8 +118,11 @@ class WeatherNewsOrchestrator:
             weather_params = StdioServerParameters(
                 command=sys.executable, args=[WEATHER_SERVER]
             )
+            # Inject the GNews API key into the news server's environment.
+            # The subprocess reads it via os.environ — nothing touches disk.
+            news_env = {**os.environ, "GNEWS_API_KEY": self.gnews_api_key}
             news_params = StdioServerParameters(
-                command=sys.executable, args=[NEWS_SERVER]
+                command=sys.executable, args=[NEWS_SERVER], env=news_env
             )
 
             async with stdio_client(weather_params) as (wr, ww):

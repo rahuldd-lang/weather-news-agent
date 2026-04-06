@@ -96,13 +96,13 @@
   {
     "id": "news_003",
     "category": "news",
-    "query": "What are people talking about in startups and venture capital?",
+    "query": "What is the latest business and economy news?",
     "criteria": {
-      "topic_relevance": "Response mentions startups, funding, or VC-related topics",
+      "topic_relevance": "Response mentions business, economy, market, or company news",
       "has_stories": "Response includes actual news items",
       "no_error": "Response does not indicate an error or failure"
     },
-    "expected_keywords": ["startup", "funding", "company", "million", "billion"],
+    "expected_keywords": ["business", "market", "company", "economy"],
     "unexpected_keywords": ["error", "not available"],
     "min_length": 100
   },
