@@ -459,11 +459,9 @@ with tab_eval:
             "latency_seconds",
         ]
         display_df = df[[c for c in display_cols if c in df.columns]]
-        st.dataframe(
-            display_df.style.applymap(colour_score, subset=["composite_score"]),
-            use_container_width=True,
-            height=350,
-        )
+        # .map() replaces the deprecated .applymap() from pandas 2.1+
+        styler = display_df.style.map(colour_score, subset=["composite_score"])
+        st.dataframe(styler, use_container_width=True, height=350)
 
         # Per-criteria breakdown
         st.subheader("Criteria Coverage Detail")
