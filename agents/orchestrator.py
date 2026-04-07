@@ -12,6 +12,7 @@ Usage (from async code):
 
 from __future__ import annotations
 
+import asyncio
 import json
 import os
 import sys
@@ -166,20 +167,25 @@ class WeatherNewsOrchestrator:
     ) -> tuple[str, list[dict]]:
         """Run the Claude tool-use loop until a final text response is returned."""
 
-        # Collect tools from both servers
-        weather_tools_resp = await weather_session.list_tools()
-        news_tools_resp = await news_session.list_tools()
-
+        # ── Fix 2: validate server capabilities before calling list_tools ──────
+        # The MCP spec requires clients to check that the server advertised
+        # 'tools' support in its initialize response before issuing list_tools.
         anthropic_tools: list[dict] = []
         tool_session_map: dict[str, "ClientSession"] = {}
 
-        for t in weather_tools_resp.tools:
-            anthropic_tools.append(_mcp_tool_to_anthropic(t))
-            tool_session_map[t.name] = weather_session
-
-        for t in news_tools_resp.tools:
-            anthropic_tools.append(_mcp_tool_to_anthropic(t))
-            tool_session_map[t.name] = news_session
+        for label, session in [("weather", weather_session), ("news", news_session)]:
+            caps = getattr(session, "server_capabilities", None)
+            has_tools = (
+                caps is not None
+                and getattr(caps, "tools", None) is not None
+            )
+            if not has_tools:
+                # Server did not advertise tool support — skip gracefully
+                continue
+            tools_resp = await session.list_tools()
+            for t in tools_resp.tools:
+                anthropic_tools.append(_mcp_tool_to_anthropic(t))
+                tool_session_map[t.name] = session
 
         client = anthropic.Anthropic(api_key=self.api_key)
 
@@ -199,7 +205,6 @@ class WeatherNewsOrchestrator:
             )
 
             if resp.stop_reason == "end_turn":
-                # Extract final text
                 text_parts = [
                     block.text
                     for block in resp.content
@@ -207,18 +212,30 @@ class WeatherNewsOrchestrator:
                 ]
                 return "\n".join(text_parts), tool_call_log
 
+            # ── Fix 3: handle max_tokens explicitly ───────────────────────────
+            if resp.stop_reason == "max_tokens":
+                text_parts = [
+                    block.text
+                    for block in resp.content
+                    if hasattr(block, "text")
+                ]
+                partial = "\n".join(text_parts)
+                return (
+                    partial + "\n\n_(Note: the response was truncated because "
+                    "it reached the maximum length. Try asking a more specific "
+                    "question for a complete answer.)_"
+                ), tool_call_log
+
             if resp.stop_reason == "tool_use":
-                # Append assistant message (with tool_use blocks)
                 messages.append(
                     {"role": "assistant", "content": resp.content}
                 )
 
-                # Process each tool call
-                tool_results = []
-                for block in resp.content:
-                    if block.type != "tool_use":
-                        continue
+                tool_use_blocks = [b for b in resp.content if b.type == "tool_use"]
 
+                # ── Fix 4: run all tool calls in this turn concurrently ────────
+                async def _invoke(block) -> tuple[dict, dict]:
+                    """Call one MCP tool and return (log_entry, tool_result)."""
                     tool_name: str = block.name
                     tool_input: dict = block.input
                     session = tool_session_map.get(tool_name)
@@ -231,16 +248,16 @@ class WeatherNewsOrchestrator:
                     }
 
                     if session is None:
-                        result_text = json.dumps(
-                            {"error": f"Unknown tool: {tool_name}"}
-                        )
-                        log_entry["error"] = f"Unknown tool: {tool_name}"
+                        err = f"Unknown tool: {tool_name}"
+                        log_entry["error"] = err
+                        result_text = json.dumps({"error": err})
+                        is_error = True
                     else:
                         try:
-                            mcp_result = await session.call_tool(
-                                tool_name, tool_input
-                            )
-                            # Extract text from MCP result content
+                            mcp_result = await session.call_tool(tool_name, tool_input)
+
+                            # ── Fix 1: check isError on the MCP result ────────
+                            is_error = getattr(mcp_result, "isError", False)
                             if mcp_result.content:
                                 result_text = "".join(
                                     c.text
@@ -249,24 +266,37 @@ class WeatherNewsOrchestrator:
                                 )
                             else:
                                 result_text = json.dumps({"result": "empty"})
-                            log_entry["output"] = result_text
+
+                            if is_error:
+                                log_entry["error"] = result_text
+                            else:
+                                log_entry["output"] = result_text
+
                         except Exception as exc:
+                            is_error = True
                             result_text = json.dumps({"error": str(exc)})
                             log_entry["error"] = str(exc)
 
-                    tool_call_log.append(log_entry)
-                    tool_results.append(
-                        {
-                            "type": "tool_result",
-                            "tool_use_id": block.id,
-                            "content": result_text,
-                        }
-                    )
+                    tool_result = {
+                        "type": "tool_result",
+                        "tool_use_id": block.id,
+                        "content": result_text,
+                        # Propagate isError so Claude knows the tool failed
+                        **({"is_error": True} if is_error else {}),
+                    }
+                    return log_entry, tool_result
 
+                # Dispatch all tool calls concurrently
+                outcomes = await asyncio.gather(*[_invoke(b) for b in tool_use_blocks])
+
+                for log_entry, tool_result in outcomes:
+                    tool_call_log.append(log_entry)
+
+                tool_results = [tr for _, tr in outcomes]
                 messages.append({"role": "user", "content": tool_results})
 
             else:
-                # Unexpected stop reason
+                # Unrecognised stop reason — surface it rather than silently drop
                 break
 
         return (
