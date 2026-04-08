@@ -230,7 +230,7 @@ with tab_chat:
             if cols[i % 2].button(ex, key=f"ex_{i}", use_container_width=True):
                 st.session_state["_pending_query"] = ex
 
-    # Display chat history
+    # Display full chat history — all messages render here, above the input
     for msg in st.session_state["messages"]:
         with st.chat_message(msg["role"]):
             st.markdown(msg["content"])
@@ -240,8 +240,42 @@ with tab_chat:
                     unsafe_allow_html=True,
                 )
 
-    # Chat input
-    pending = st.session_state.pop("_pending_query", None)
+    # Show spinner inline at the bottom of the history while the agent runs
+    if st.session_state.get("_thinking"):
+        with st.chat_message("assistant"):
+            with st.spinner("Thinking… (fetching live data via MCP servers)"):
+                query   = st.session_state.pop("_thinking")
+                history = st.session_state.pop("_history_snapshot", [])
+                try:
+                    result     = run_query(query, api_key, model, history)
+                    response   = result["response"]
+                    tool_calls = result.get("tool_calls", [])
+                    error      = result.get("error")
+                    tool_names = [tc["tool"] for tc in tool_calls]
+                    tool_summary = ", ".join(f"`{n}`" for n in tool_names) if tool_names else None
+
+                    st.session_state["messages"].append(
+                        {"role": "assistant", "content": response, "tool_summary": tool_summary}
+                    )
+                    st.session_state["last_tool_calls"] = tool_calls
+                    st.session_state["last_model"]      = result.get("model", model)
+                    if error:
+                        st.session_state["_agent_error"] = error
+
+                except Exception as exc:
+                    err_msg = f"❌ Unexpected error: {exc}"
+                    st.session_state["messages"].append(
+                        {"role": "assistant", "content": err_msg}
+                    )
+        st.rerun()  # re-render so the new message appears in the history loop above
+
+    # Surface any agent-level warning after rerun
+    _agent_err = st.session_state.pop("_agent_error", None)
+    if _agent_err:
+        st.warning(f"⚠️ Agent encountered an error: {_agent_err}")
+
+    # Chat input — always rendered last so it sits at the bottom of the history
+    pending    = st.session_state.pop("_pending_query", None)
     user_input = st.chat_input("Ask about weather or news…") or pending
 
     if user_input:
@@ -249,59 +283,17 @@ with tab_chat:
             st.error("⛔ Please enter your Anthropic API key in the sidebar.")
             st.stop()
 
-        # Display user message
-        st.session_state["messages"].append({"role": "user", "content": user_input})
-        with st.chat_message("user"):
-            st.markdown(user_input)
-
-        # Build history for Claude (exclude the current message we just added)
+        # Snapshot history before appending the new user turn
         history_for_agent = [
             {"role": m["role"], "content": m["content"]}
-            for m in st.session_state["messages"][:-1]
+            for m in st.session_state["messages"]
             if m["role"] in ("user", "assistant")
         ]
-
-        # Run agent
-        with st.chat_message("assistant"):
-            with st.spinner("Thinking… (fetching live data via MCP servers)"):
-                try:
-                    result = run_query(user_input, api_key, model, history_for_agent)
-                    response = result["response"]
-                    tool_calls = result.get("tool_calls", [])
-                    error = result.get("error")
-
-                    st.markdown(response)
-
-                    tool_names = [tc["tool"] for tc in tool_calls]
-                    tool_summary = ", ".join(f"`{n}`" for n in tool_names) if tool_names else None
-                    if tool_summary:
-                        st.markdown(
-                            f"<div class='chat-info'>🔧 Tools called: {tool_summary}</div>",
-                            unsafe_allow_html=True,
-                        )
-
-                    # Store for debug tab
-                    st.session_state["last_tool_calls"] = tool_calls
-                    st.session_state["last_model"] = result.get("model", model)
-
-                    # Persist message
-                    st.session_state["messages"].append(
-                        {
-                            "role": "assistant",
-                            "content": response,
-                            "tool_summary": tool_summary,
-                        }
-                    )
-
-                    if error:
-                        st.warning(f"⚠️ Agent encountered an error: {error}")
-
-                except Exception as exc:
-                    err_msg = f"❌ Unexpected error: {exc}"
-                    st.error(err_msg)
-                    st.session_state["messages"].append(
-                        {"role": "assistant", "content": err_msg}
-                    )
+        st.session_state["messages"].append({"role": "user", "content": user_input})
+        # Store work for the spinner block above; rerun picks it up immediately
+        st.session_state["_thinking"]        = user_input
+        st.session_state["_history_snapshot"] = history_for_agent
+        st.rerun()
 
     # Clear chat button
     if st.session_state["messages"]:
