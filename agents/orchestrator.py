@@ -51,18 +51,46 @@ Guidelines:
 
 # ── Tool conversion helpers ────────────────────────────────────────────────────
 
+def _sanitize_schema(raw) -> dict:
+    """
+    Return a clean JSON Schema dict that Anthropic's API accepts.
+
+    FastMCP emits extra fields (title, $defs, additionalProperties, etc.)
+    that are valid JSON Schema but cause Anthropic's tool validator to
+    silently drop or reject the tool definition.  We keep only the three
+    fields the API actually uses: type, properties, required.
+    """
+    if hasattr(raw, "model_dump"):
+        raw = raw.model_dump(exclude_none=True)
+    if not isinstance(raw, dict):
+        return {"type": "object", "properties": {}}
+
+    schema: dict = {"type": "object"}
+
+    props = raw.get("properties", {})
+    if props:
+        # Strip per-property 'title' fields too — they're noise to the API
+        schema["properties"] = {
+            k: {pk: pv for pk, pv in v.items() if pk != "title"}
+            if isinstance(v, dict) else v
+            for k, v in props.items()
+        }
+    else:
+        schema["properties"] = {}
+
+    required = raw.get("required", [])
+    if required:
+        schema["required"] = required
+
+    return schema
+
+
 def _mcp_tool_to_anthropic(tool) -> dict:
     """Convert an MCP Tool object to Anthropic API tool format."""
-    schema = tool.inputSchema
-    # Ensure it's a proper dict
-    if hasattr(schema, "model_dump"):
-        schema = schema.model_dump(exclude_none=True)
-    elif not isinstance(schema, dict):
-        schema = {"type": "object", "properties": {}, "required": []}
     return {
         "name": tool.name,
         "description": tool.description or "",
-        "input_schema": schema,
+        "input_schema": _sanitize_schema(tool.inputSchema),
     }
 
 
@@ -170,19 +198,29 @@ class WeatherNewsOrchestrator:
         # ── Fix 2: validate server capabilities before calling list_tools ──────
         # The MCP spec requires clients to check that the server advertised
         # 'tools' support in its initialize response before issuing list_tools.
+        # We read server_capabilities defensively: different versions of the
+        # mcp library may store it under different attribute names or not at
+        # all.  If we cannot determine capabilities we proceed optimistically
+        # (both our servers are known to support tools).
         anthropic_tools: list[dict] = []
         tool_session_map: dict[str, "ClientSession"] = {}
 
         for label, session in [("weather", weather_session), ("news", news_session)]:
-            caps = getattr(session, "server_capabilities", None)
-            has_tools = (
-                caps is not None
-                and getattr(caps, "tools", None) is not None
+            # Try known attribute names across mcp library versions
+            caps = (
+                getattr(session, "server_capabilities", None)
+                or getattr(session, "_server_capabilities", None)
             )
-            if not has_tools:
-                # Server did not advertise tool support — skip gracefully
+            if caps is not None:
+                # Capabilities found — honour the spec: skip if tools not declared
+                if getattr(caps, "tools", None) is None:
+                    continue
+            # caps is None → library version doesn't expose them; proceed anyway
+            try:
+                tools_resp = await session.list_tools()
+            except Exception:
+                # Server truly doesn't support list_tools — skip
                 continue
-            tools_resp = await session.list_tools()
             for t in tools_resp.tools:
                 anthropic_tools.append(_mcp_tool_to_anthropic(t))
                 tool_session_map[t.name] = session
