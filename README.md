@@ -94,7 +94,7 @@ weather-news-agent/
 │   └── orchestrator.py           # Claude agent loop + MCP client management
 ├── mcp_servers/
 │   ├── weather_server.py         # Open-Meteo MCP server (FastMCP)
-│   └── news_server.py            # HackerNews MCP server (FastMCP)
+│   └── news_server.py            # GNews.io MCP server (FastMCP)
 └── evaluation/
     ├── eval_dataset.json          # 10 test cases (weather, news, mixed, edge)
     └── evaluator.py               # Metric computation + async runner
